@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>射电望远镜阵列观测控制台</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">◎</span>
+    <div>
+      <h1>射电望远镜阵列观测控制台</h1>
+      <span class="subtitle">统一天空视图 · 数据可用性 · 校准谱系 · 批次恢复</span>
+    </div>
+  </div>
+  <div class="clockbox">
+    <div><span class="muted">UTC</span> <b id="clockUtc">--</b></div>
+    <div><span class="muted">本地时</span> <b id="clockLocal">--</b></div>
+    <div><span class="muted">LST</span> <b id="clockLst">--</b></div>
+  </div>
+  <div class="controls">
+    <button id="btnPlay" class="primary">▶ 运行</button>
+    <button id="btnPause">⏸ 暂停</button>
+    <label class="speed">速度
+      <select id="simSpeed">
+        <option value="300">1×</option>
+        <option value="3000" selected>10×</option>
+        <option value="18000">60×</option>
+        <option value="90000">300×</option>
+      </select>
+    </label>
+    <button id="btnRecompute" title="从时间线光标所在时刻重新计算后续观测">⟳ 从此刻重算</button>
+    <button id="btnReset" title="清空全部状态，重置演示">♻ 重置全部</button>
+  </div>
+</header>
+
+<div id="resumeBanner" class="banner hidden">
+  <span id="resumeText"></span>
+  <button id="btnDismissResume" class="ghost">知道了</button>
+</div>
+
+<main class="layout">
+  <!-- 左列 -->
+  <section class="col col-left">
+    <div class="panel">
+      <div class="panel-h">
+        <h2>天空视图（地平坐标）</h2>
+        <div class="targetsel">
+          <label>观测目标
+            <select id="targetSelect"></select>
+          </label>
+        </div>
+      </div>
+      <canvas id="skyCanvas" width="560" height="560"></canvas>
+      <div class="legend">
+        <span><i class="lg scan"></i>扫描区域</span>
+        <span><i class="lg beam"></i>天线波束</span>
+        <span><i class="lg block"></i>地形遮挡区</span>
+        <span><i class="lg rfi"></i>地面干扰源</span>
+        <span><i class="lg tgt-ok"></i>目标可见</span>
+        <span><i class="lg tgt-bad"></i>目标被遮挡</span>
+      </div>
+      <div class="scan-edit">
+        <span>扫描半径 <b id="scanRadiusVal">0.40°</b></span>
+        <input type="range" id="scanRadius" min="0.1" max="2" step="0.05" value="0.4" />
+        <button id="btnMoveScan">+ 移动中心</button>
+        <span class="hint">在天空视图中拖动可直接移动扫描区域</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>阵列布局（24 天线）</h2></div>
+      <canvas id="arrayCanvas" width="560" height="280"></canvas>
+    </div>
+  </section>
+
+  <!-- 中列 -->
+  <section class="col col-mid">
+    <div class="panel">
+      <div class="panel-h"><h2>UV 覆盖（合成孔径采样）</h2></div>
+      <canvas id="uvCanvas" width="560" height="300"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">
+        <h2>数据可用性时间线</h2>
+        <div class="tl-tools">
+          <label>窗口 <select id="tlWindow">
+            <option value="0">全程</option>
+            <option value="7200000">2 小时</option>
+            <option value="1800000">30 分钟</option>
+          </select></label>
+          <span class="hint">点击任意时刻定位光标并可从此重算</span>
+        </div>
+      </div>
+      <div id="timelineWrap">
+        <canvas id="timelineCanvas" width="680" height="380"></canvas>
+        <div id="tlTooltip" class="tooltip hidden"></div>
+      </div>
+      <div id="onsetList" class="onsets"></div>
+    </div>
+  </section>
+
+  <!-- 右列 -->
+  <section class="col col-right">
+    <div class="panel">
+      <div class="panel-h"><h2>覆盖范围与成像质量</h2></div>
+      <div id="qualityBox"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">
+        <h2>天线与阵列组合</h2>
+        <label class="preset">组合
+          <select id="presetSelect">
+            <option value="all">全部 24 天线</option>
+            <option value="core">紧凑核心阵列</option>
+            <option value="arms">长基线臂阵列</option>
+          </select>
+        </label>
+      </div>
+      <div class="ant-actions">
+        <button id="btnAntDrift">注入时钟漂移</button>
+        <button id="btnAntOffline">排除随机异常天线</button>
+        <button id="btnAntRestore">恢复被排除天线</button>
+      </div>
+      <div id="antennaGrid" class="ant-grid"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>地面干扰（RFI）</h2></div>
+      <div class="ant-actions">
+        <button id="btnRfiBroad">注入宽带干扰</button>
+        <button id="btnRfiNarrow">注入窄带干扰</button>
+        <button id="btnRfiClear">清除干扰</button>
+      </div>
+      <div id="rfiBox"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>校准谱系（可逐步回退）</h2></div>
+      <div id="calSteps" class="cal-steps"></div>
+      <div class="cal-actions">
+        <button id="btnCalStep">执行下一步校准</button>
+        <button id="btnCalUndo">↩ 回退一步</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>观测批次</h2></div>
+      <div id="batchBox"></div>
+      <div class="cal-actions">
+        <button id="btnBatchNew">新建批次（2 h）</button>
+        <button id="btnBatchPause">暂停批次</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>事件日志（问题溯源）</h2></div>
+      <ul id="eventLog" class="event-log"></ul>
+    </div>
+  </section>
+</main>
+
+<script src="js/model.js"></script>
+<script src="js/state.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/views.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
